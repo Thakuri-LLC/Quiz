@@ -1,0 +1,107 @@
+﻿@page "/geography"
+@rendermode InteractiveServer
+
+@using System.Text.Json
+@using System.Text.Json.Serialization
+@using ViewModel
+@inject IHttpClientFactory ClientFactory
+@inject IConfiguration Configuration
+
+<PageTitle>Geography</PageTitle>
+
+<h1>Geography</h1>
+@if (SessionID > 0)
+{
+    <p role="status">Current Session: @SessionID</p>
+
+    <div class="progress mb-2" style="width: 60rem;" role="progressbar" aria-label="Example with label" aria-valuenow="25" aria-valuemin="0" aria-valuemax="100">
+        <div class="progress-bar bg-success" style="width: @progress.ToString("0%")">@progress.ToString("0%")</div>
+    </div>
+    <div class="card" style="width: 60rem;">
+        <div class="card-body">
+            <h4 class="card-title mb-3">@quiz?.Question</h4>
+            @* <h6 class="card-subtitle mb-2 text-body-secondary">Card subtitle</h6> *@
+            <p class="card-text">
+                <div class="row">
+                    @foreach (var option in quiz.Options)
+                    {
+                        <div class="col-md-6 mb-3">
+                            <input type="radio" class="btn-check" id="btn-check-@option.QuizOptionID" autocomplete="off" name="options">
+                            <label class="btn btn-outline-primary" for="btn-check-@option.QuizOptionID">@option.QuizOptionName</label>
+                        </div>
+                    }
+                </div>
+            </p>
+        </div>
+        <div class="card-footer">
+            <div class="d-grid gap-2 d-md-flex justify-content-md-between">
+                <button class="btn btn-secondary me-md-2" type="button"><i class="bi bi-chevron-left"></i> Previous</button>
+                <button class="btn btn-primary" type="button" @onclick="OnNext">Next <i class="bi bi-chevron-right"></i></button>
+            </div>
+        </div>
+    </div>
+}
+else
+{
+    <button class="btn btn-primary" @onclick="OnStart">Start Quiz</button>
+}
+
+@code {
+    private QuizViewModel? quiz;
+    private HttpClient _client;
+    private long? SessionID;
+    private int count = 0;
+    private int progress = 0;
+    private int totalQuiz = 3;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _client = ClientFactory.CreateClient();
+    }
+
+    private async Task OnStart()
+    {
+        var request = new HttpRequestMessage(HttpMethod.Get, $"{Configuration["AppSettings:WebAPI"]}/Common/StartNextSession");
+        request.Headers.Add("Accept", "application/json");
+
+        var response = await _client.SendAsync(request);
+
+        if (response.IsSuccessStatusCode)
+        {
+            using var responseStream = await response.Content.ReadAsStreamAsync();
+            SessionID = await JsonSerializer.DeserializeAsync<long>(responseStream);
+            await OnNext();            
+            progress = (++count / totalQuiz);
+        }
+    }
+
+    private async Task OnSelection()
+    {
+        var request = new HttpRequestMessage(HttpMethod.Get, $"{Configuration["AppSettings:WebAPI"]}/Geography/Next/{SessionID}");
+        request.Headers.Add("Accept", "application/json");
+
+        var response = await _client.SendAsync(request);
+
+        if (response.IsSuccessStatusCode)
+        {
+            quiz = await response.Content.ReadFromJsonAsync<QuizViewModel>();
+            progress = (++count / totalQuiz);
+            StateHasChanged();
+        }
+    }
+
+    private async Task OnNext()
+    {
+        var request = new HttpRequestMessage(HttpMethod.Get, $"{Configuration["AppSettings:WebAPI"]}/Geography/Next/{SessionID}");
+        request.Headers.Add("Accept", "application/json");
+
+        var response = await _client.SendAsync(request);
+
+        if (response.IsSuccessStatusCode)
+        {
+            quiz = await response.Content.ReadFromJsonAsync<QuizViewModel>();
+            progress = (++count / totalQuiz);
+            StateHasChanged();
+        }
+    }
+}
